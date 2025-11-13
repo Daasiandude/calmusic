@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cal Music</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/dist/umd/phosphor-icons-web.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;500;700;900&display=swap');
+        
+        /* --- Dynamic CSS Variables --- */
+        :root {
+            /* Default to Purple/Violet */
+            --ambient-hue: 260; 
+            --ambient-saturation: 95%; 
+            --ambient-intensity: 0.3; 
+            --primary-glow-color: hsl(var(--ambient-hue), var(--ambient-saturation), 50%); 
+            --bg-color: hsl(0, 0%, 98%); 
+            --card-color: hsl(0, 0%, 100%); 
+            --control-color: hsl(0, 0%, 93%); 
+            --text-color: #1f2937; 
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            width: 100vw; 
+            height: 100vh;
+            margin: 0; 
+            padding: 0; 
+            display: flex;
+            align-items: stretch;
+            justify-content: center;
+        }
+
+        #app {
+            width: 100%; 
+            min-height: 100vh;
+            background-color: var(--card-color); 
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Ambient Glow Effect (Full-Screen & Brighter) */
+        #app::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 0;
+            box-shadow: 
+                0 0 200px 20px hsla(var(--ambient-hue), var(--ambient-saturation), 50%, var(--ambient-intensity) * 0.5) inset,
+                0 0 100px hsla(var(--ambient-hue), var(--ambient-saturation), 70%, var(--ambient-intensity) * 0.6) inset;
+            transition: all 0.5s ease-out; 
+        }
+        
+        .content-area {
+            flex-grow: 1;
+            overflow: hidden;
+            z-index: 10;
+        }
+
+        .view-section {
+            display: none;
+            flex-grow: 1;
+            padding: 1.5rem;
+            height: 100%;
+            overflow-y: auto;
+        }
+        .view-section.active {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Custom styles for text overlay on visualizer */
+        .text-shadow-lg {
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.5), 0 0 5px var(--primary-glow-color);
+        }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: hsla(var(--ambient-hue), var(--ambient-saturation), 50%, 0.5);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: hsla(var(--ambient-hue), var(--ambient-saturation), 50%, 0.8);
+        }
+
+        /* Range Slider Styling */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            background: #ccc; 
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--primary-glow-color);
+            box-shadow: 0 0 8px var(--primary-glow-color);
+            cursor: grab;
+            transition: all 0.1s;
+        }
+        
+        /* Active Glow Button Styling for Navigation and Transport Controls */
+        .glow-active {
+            color: var(--primary-glow-color) !important;
+            text-shadow: 0 0 8px var(--primary-glow-color);
+            transform: scale(1.1);
+        }
+        
+        /* Navigation Button Active Style for SVG (New) */
+        .nav-button-active svg {
+            color: white; /* Ensure the fill/stroke is white */
+            background-color: var(--primary-glow-color);
+            box-shadow: 0 0 10px var(--primary-glow-color);
+            transform: scale(1.05);
+        }
+        .nav-button-active svg path, .nav-button-active svg polyline, .nav-button-active svg line {
+            stroke: white; /* For stroke-based icons */
+        }
+
+
+        /* Full-screen visualizer layout */
+        #nowPlayingContent {
+            padding: 0;
+        }
+        .now-playing-container {
+            height: 100%;
+            width: 100%;
+            padding: 1.5rem;
+        }
+        
+        /* Hue Slider background for better visual feedback */
+        #hueSlider {
+            background: linear-gradient(to right, 
+                hsl(0, 100%, 50%), 
+                hsl(60, 100%, 50%), 
+                hsl(120, 100%, 50%), 
+                hsl(180, 100%, 50%), 
+                hsl(240, 100%, 50%), 
+                hsl(300, 100%, 50%), 
+                hsl(360, 100%, 50%));
+        }
+        
+        /* Custom Vertical Slider Style for EQ (Placeholder/Example) */
+        .vertical-slider {
+             height: 8px !important; 
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="app" class="relative">
+    <input type="file" id="audioFileInput" accept="audio/*" multiple style="display: none;">
+
+    <header class="p-4 flex items-center justify-between z-20 sticky top-0 bg-white/90 backdrop-blur-md border-b border-gray-200">
+        
+        <h1 class="text-2xl font-black text-gray-900 flex items-center">
+            <i class="ph ph-headphones-fill mr-2" style="color: var(--primary-glow-color);"></i> Cal Music
+        </h1>
+        
+        <nav class="flex space-x-3 items-center">
+            <button class="nav-btn p-3 rounded-full transition text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200" data-view="settingsView" onclick="changeView('settingsView')">
+                <svg id="settingsIconSvg" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="4" width="20" height="4" rx="2"></rect>
+                    <rect x="2" y="10" width="20" height="4" rx="2"></rect>
+                    <line x1="18" y1="12" x2="18" y2="12"></line>
+                    <rect x="2" y="16" width="20" height="4" rx="2"></rect>
+                    <line x1="6" y1="6" x2="6" y2="6"></line>
+                    <line x1="12" y1="18" x2="12" y2="18"></line>
+                </svg>
+            </button>
+            
+            <div class="h-6 w-px bg-gray-300"></div>
+
+            <button class="nav-btn p-3 rounded-full transition text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200" data-view="nowPlayingContent" onclick="changeView('nowPlayingContent')">
+                <svg id="waveformIconSvg" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="2" x2="12" y2="22"></line>
+                    <line x1="6" y1="7" x2="6" y2="17"></line>
+                    <line x1="18" y1="9" x2="18" y2="15"></line>
+                    <line x1="3" y1="11" x2="3" y2="13"></line>
+                    <line x1="21" y1="11" x2="21" y2="13"></line>
+                </svg>
+            </button>
+            
+            <button class="nav-btn p-3 rounded-full transition text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200" data-view="playlistView" onclick="changeView('playlistView')">
+                 <svg id="playlistIconSvg" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
+            </button>
+        </nav>
+        
+        <button onclick="clearPlaylistAndStorage()" 
+                class="p-2 rounded-lg hover:bg-red-100 transition text-red-500" 
+                title="Clear ALL local data and playlist">
+            <i class="ph ph-trash-fill text-xl"></i>
+        </button>
+    </header>
+    <div class="content-area">
+        
+        <section id="nowPlayingContent" class="view-section active p-0">
+            <div class="now-playing-container relative flex-grow flex items-center justify-center">
+                
+                <canvas id="audioVisualizer" class="absolute inset-0 w-full h-full opacity-90"></canvas>
+                
+                <div id="nowPlayingArtAndInfo" class="relative z-20 flex flex-col items-center justify-center text-center px-4 max-w-lg">
+                    <p id="currentArtist" class="text-sm sm:text-lg font-semibold mb-1 transition-colors text-gray-200 text-shadow-lg" style="color: var(--primary-glow-color);">
+                        Offline Mode
+                    </p>
+                    <h2 id="currentTitle" class="text-2xl sm:text-4xl lg:text-6xl font-extrabold mb-1 leading-tight text-white text-shadow-lg">
+                        CAL MUSIC
+                    </h2>
+                    <p id="currentAlbum" class="text-xs sm:text-base text-gray-300 text-shadow-lg">
+                        Load files to build your console.
+                    </p>
+                </div>
+                </div>
+        </section>
+
+        <section id="playlistView" class="view-section custom-scrollbar pt-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Console Playlist</h2>
+                <button onclick="document.getElementById('audioFileInput').click()"
+                        class="px-4 py-2 rounded-full font-medium text-sm text-white transition bg-gray-800 hover:bg-gray-700" 
+                        title="Add Audio Files">
+                    <i class="ph ph-music-notes-plus-fill mr-1"></i> Add Tracks
+                </button>
+            </div>
+            
+            <div id="playlist" class="space-y-2 flex-grow overflow-y-auto custom-scrollbar">
+                <p id="fileStatus" class="text-gray-500 text-center p-8">Loading playlist from storage...</p>
+            </div>
+        </section>
+
+        <section id="settingsView" class="view-section pt-4">
+            <h2 class="text-3xl font-bold mb-6 text-gray-800" style="color: var(--primary-glow-color);">System Calibration</h2>
+
+            <div class="mb-8 p-6 rounded-xl bg-control-color shadow-md border border-gray-200">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800 flex items-center"><i class="ph ph-equalizer-fill mr-2"></i> 3-Band Equalizer</h3>
+                <div class="grid grid-cols-3 gap-8 text-center">
+                    
+                    <div>
+                        <span class="text-sm font-mono text-gray-500 block mb-1">60 Hz (Bass)</span>
+                        <input type="range" id="eqBass" min="-12" max="12" value="0" step="0.1" class="h-12 w-full vertical-slider">
+                        <span id="eqBassValue" class="text-lg font-bold mt-2 block" style="color: var(--primary-glow-color);">0.0 dB</span>
+                    </div>
+
+                    <div>
+                        <span class="text-sm font-mono text-gray-500 block mb-1">1000 Hz (Mids)</span>
+                        <input type="range" id="eqMids" min="-12" max="12" value="0" step="0.1" class="h-12 w-full vertical-slider">
+                        <span id="eqMidsValue" class="text-lg font-bold mt-2 block" style="color: var(--primary-glow-color);">0.0 dB</span>
+                    </div>
+
+                    <div>
+                        <span class="text-sm font-mono text-gray-500 block mb-1">10000 Hz (Treble)</span>
+                        <input type="range" id="eqTreble" min="-12" max="12" value="0" step="0.1" class="h-12 w-full vertical-slider">
+                        <span id="eqTrebleValue" class="text-lg font-bold mt-2 block" style="color: var(--primary-glow-color);">0.0 dB</span>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6 rounded-xl bg-control-color shadow-md border border-gray-200">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800 flex items-center"><i class="ph ph-sparkle-fill mr-2"></i> Ambient Lighting Controls</h3>
+                <div class="space-y-4">
+                    
+                    <div>
+                        <label for="hueSlider" class="block text-gray-700 font-medium mb-1 flex justify-between">Base Hue (Color): <span id="hueValue" class="text-primary-glow">260° (Purple)</span></label>
+                        <input type="range" id="hueSlider" min="0" max="360" value="260" oninput="updateStaticLighting()">
+                    </div>
+                    
+                    <div>
+                        <label for="saturationSlider" class="block text-gray-700 font-medium mb-1 flex justify-between">Saturation: <span id="saturationValue" class="text-primary-glow">95%</span></label>
+                        <input type="range" id="saturationSlider" min="0" max="100" value="95" oninput="updateStaticLighting()">
+                    </div>
+                    
+                    <div>
+                        <label for="intensitySlider" class="block text-gray-700 font-medium mb-1 flex justify-between">Base Intensity: <span id="intensityValue" class="text-primary-glow">30%</span></label>
+                        <input type="range" id="intensitySlider" min="0" max="100" value="30" oninput="updateStaticLighting()">
+                    </div>
+                    
+                    <div class="flex items-center justify-between pt-4 border-t border-gray-300">
+                        <label for="rainbowToggle" class="text-gray-700 font-medium">Rainbow Shift Mode (Dynamic)</label>
+                        <button id="rainbowToggle" onclick="toggleRainbowMode()" class="toggle-btn px-4 py-2 rounded-full font-medium text-sm transition text-white bg-red-500 hover:bg-red-400">
+                            OFF
+                        </button>
+                    </div>
+                    <div class="flex items-center justify-between pt-4 border-t border-gray-300">
+                        <label for="dynamicLightingToggle" class="text-gray-700 font-medium">Visualizer Color Sync (Bass Shift)</label>
+                        <button id="dynamicLightingToggle" onclick="toggleDynamicLighting()" class="toggle-btn px-4 py-2 rounded-full font-medium text-sm text-white transition bg-gray-800 hover:bg-gray-700">
+                            ON
+                        </button>
+                    </div>
+
+
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <footer class="p-4 bg-white/90 backdrop-blur-md border-t border-gray-200 z-20">
+        
+        <div class="flex items-center space-x-3 mb-3">
+            <span id="currentTime" class="text-sm font-mono text-gray-600 w-10 text-right">0:00</span>
+            <input type="range" id="seekSlider" min="0" max="100" value="0">
+            <span id="duration" class="text-sm font-mono text-gray-600 w-10 text-left">0:00</span>
+        </div>
+
+        <div class="flex items-center justify-between">
+            
+            <div class="flex items-center space-x-4">
+                <button onclick="document.getElementById('audioFileInput').click()"
+                        class="px-4 py-2 rounded-full font-medium text-sm text-white transition bg-gray-800 hover:bg-gray-700 shadow-lg" 
+                        title="Add Audio Files">
+                    <i class="ph ph-music-notes-plus-fill mr-1"></i> Add Tracks
+                </button>
+                
+                <div class="flex items-center space-x-2 w-24 hidden sm:flex">
+                    <i id="volumeIcon" class="ph ph-speaker-high text-xl text-gray-600"></i>
+                    <input type="range" id="volumeSlider" min="0" max="100" value="75">
+                </div>
+            </div>
+
+            <div class="flex items-center">
+                
+                <button id="shuffleBtn" onclick="toggleShuffle()" 
+                        class="w-12 h-12 rounded-full flex items-center justify-center bg-gray-700 hover:bg-gray-600 transition text-gray-200 mr-4" 
+                        title="Toggle Shuffle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="16 3 21 3 21 8"></polyline>
+                        <line x1="4" y1="20" x2="21" y2="3"></line>
+                        <polyline points="21 16 21 21 16 21"></polyline>
+                        <line x1="15" y1="15" x2="21" y2="21"></line>
+                        <line x1="4" y1="4" x2="9" y2="9"></line>
+                    </svg>
+                </button>
+
+                <button onclick="skipTrack(-1)" 
+                        class="w-16 h-16 rounded-full flex items-center justify-center bg-gray-800 hover:bg-gray-700 transition text-white" 
+                        title="Previous Track">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="19 20 9 12 19 4 19 20"></polygon>
+                        <line x1="5" y1="19" x2="5" y2="5"></line>
+                    </svg>
+                </button>
+
+                <button id="playPauseBtn" onclick="togglePlayPause()" 
+                        class="w-16 h-16 rounded-full flex items-center justify-center transition shadow-xl mx-2"
+                        style="background-color: var(--primary-glow-color); color: white; box-shadow: 0 0 20px var(--primary-glow-color);"
+                        title="Play/Pause">
+                    <svg id="playPauseIconSvg" xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                </button>
+
+                <button onclick="skipTrack(1)" 
+                        class="w-16 h-16 rounded-full flex items-center justify-center bg-gray-800 hover:bg-gray-700 transition text-white" 
+                        title="Next Track">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="5 4 15 12 5 20 5 4"></polygon>
+                        <line x1="19" y1="5" x2="19" y2="19"></line>
+                    </svg>
+                </button>
+                
+                <button id="repeatBtn" onclick="toggleRepeat()" 
+                        class="w-12 h-12 rounded-full flex items-center justify-center bg-gray-700 hover:bg-gray-600 transition text-gray-200 ml-4" 
+                        title="Toggle Repeat Mode">
+                    <svg id="repeatIconSvg" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="17 1 21 5 17 9"></polyline>
+                        <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                        <polyline points="7 23 3 19 7 15"></polyline>
+                        <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="w-40 md:w-48 flex-shrink-0 flex items-center justify-end sm:hidden">
+                <div class="flex items-center space-x-2 w-full max-w-[80px]">
+                    <i id="volumeIconMobile" class="ph ph-speaker-high text-xl text-gray-600"></i>
+                    <input type="range" id="volumeSliderMobile" min="0" max="100" value="75">
+                </div>
+            </div>
+
+            <div class="w-40 md:w-48 flex-shrink-0 hidden sm:block"></div> 
+
+        </div>
+
+    </footer>
+</div>
+
+<div id="messageBox" class="fixed inset-0 bg-gray-900/70 flex items-center justify-center p-4 z-50 hidden" onclick="hideMessageBox()">
+    <div class="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border border-gray-200" onclick="event.stopPropagation()">
+        <h3 id="messageTitle" class="text-xl font-bold mb-3 text-gray-800" style="color: var(--primary-glow-color);"></h3>
+        <p id="messageText" class="text-gray-600 mb-4"></p>
+        <button onclick="hideMessageBox()" class="w-full py-2 rounded-lg font-semibold transition text-white" style="background-color: var(--primary-glow-color);">
+            Acknowledge
+        </button>
+    </div>
+</div>
+
+<script>
+    // --- IndexedDB Constants ---
+    const DB_NAME = 'QuantumConsoleDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'playlist';
+
+    // --- Core Player Variables ---
+    const audio = new Audio();
+    let playlist = []; 
+    let currentTrackIndex = -1;
+    let isPlaying = false;
+    let activeView = 'nowPlayingContent'; 
+    let repeatMode = 'off'; 
+    let isShuffle = false;
+    let db; // IndexedDB instance
+    let isDynamicLighting = true; // Controls visualizer color shift
+    let isRainbowMode = false; // NEW: Controls constant hue rotation
+    let rainbowFrameId = null; // NEW: Animation frame for rainbow shift
+    let currentRainbowHue = 260; // NEW: Starting hue for rainbow
+
+    // --- Audio Context and Visualizer Variables ---
+    let audioContext;
+    let analyserNode;
+    let sourceNode;
+    let gainNode; 
+    let eqNodes = []; 
+    let bufferLength;
+    let dataArray;
+    let canvas, canvasCtx;
+    let animationFrameId;
+
+    // --- DOM Elements ---
+    const audioFileInput = document.getElementById('audioFileInput');
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    // Updated to reference the new SVG element
+    const playPauseIcon = document.getElementById('playPauseIconSvg'); 
+    const playlistEl = document.getElementById('playlist');
+    const seekSlider = document.getElementById('seekSlider');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const volumeSliderMobile = document.getElementById('volumeSliderMobile');
+    const volumeIcon = document.getElementById('volumeIcon');
+    const volumeIconMobile = document.getElementById('volumeIconMobile');
+    const currentTimeEl = document.getElementById('currentTime');
+    const durationEl = document.getElementById('duration');
+    const messageBox = document.getElementById('messageBox');
+    const messageTitleEl = document.getElementById('messageTitle');
+    const messageTextEl = document.getElementById('messageText');
+    const currentArtistEl = document.getElementById('currentArtist');
+    const currentTitleEl = document.getElementById('currentTitle');
+    const currentAlbumEl = document.getElementById('currentAlbum');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const repeatBtn = document.getElementById('repeatBtn');
+    // New reference for Repeat SVG
+    const repeatIconSvg = document.getElementById('repeatIconSvg');
+    
+    // Lighting Controls
+    const hueSlider = document.getElementById('hueSlider');
+    const saturationSlider = document.getElementById('saturationSlider');
+    const intensitySlider = document.getElementById('intensitySlider');
+    const dynamicLightingToggle = document.getElementById('dynamicLightingToggle');
+    const rainbowToggle = document.getElementById('rainbowToggle'); // NEW
+    
+    // EQ Sliders
+    const eqSliders = {
+        'eqBass': { freq: 60, type: 'lowshelf', node: null, valueEl: document.getElementById('eqBassValue') },
+        'eqMids': { freq: 1000, type: 'peaking', node: null, valueEl: document.getElementById('eqMidsValue') },
+        'eqTreble': { freq: 10000, type: 'highshelf', node: null, valueEl: document.getElementById('eqTrebleValue') }
+    };
+
+    // --- IndexedDB Management ---
+    // NO CHANGES TO DB FUNCTIONS
+
+    function openDB() {
+        return new Promise((resolve, reject) => {
+            if (!('indexedDB' in window)) {
+                console.error("IndexedDB not supported.");
+                showMessageBox('Fatal Error', 'Your browser does not support IndexedDB. Tracks cannot be saved.');
+                return reject(new Error("IndexedDB not supported"));
+            }
+
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+            request.onupgradeneeded = (event) => {
+                db = event.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    // keyPath is 'id', object stored contains 'file' (the File/Blob)
+                    db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true }); 
+                }
+            };
+
+            request.onsuccess = (event) => {
+                db = event.target.result;
+                console.log("IndexedDB opened successfully.");
+                resolve(db);
+            };
+
+            request.onerror = (event) => {
+                console.error("IndexedDB error:", event.target.errorCode, event.target.error);
+                showMessageBox('Storage Error', 'Could not open local database. Persistent storage is disabled. Files will not be saved.');
+                reject(event.target.error);
+            };
+        });
+    }
+
+    function saveTrackToDB(track) {
+        return new Promise((resolve, reject) => {
+            if (!db) return reject(new Error("Database not initialized"));
+            
+            const transaction = db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            
+            const dataToSave = {
+                file: track.file, // This is the actual File object
+                title: track.title,
+                artist: track.artist,
+                album: track.album,
+                albumArtUrl: track.albumArtUrl 
+            };
+            
+            const request = store.add(dataToSave);
+
+            request.onsuccess = () => {
+                console.log(`Track saved to DB: ${track.title}`);
+                resolve(request.result); 
+            };
+            request.onerror = () => {
+                console.error("Error saving track:", request.error);
+                reject(request.error);
+            };
+        });
+    }
+
+    function loadPlaylistFromDB() {
+        return new Promise((resolve, reject) => {
+            if (!db) return resolve([]);
+            
+            const transaction = db.transaction([STORE_NAME], 'readonly');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.getAll();
+
+            request.onsuccess = () => {
+                const loadedTracks = request.result.map(track => {
+                    // IMPORTANT: The File URL must be created fresh when loaded from DB.
+                    // The old fileUrl would be invalid after a page reload.
+                    track.fileUrl = URL.createObjectURL(track.file); 
+                    return track;
+                });
+                console.log(`Loaded ${loadedTracks.length} tracks from DB.`);
+                resolve(loadedTracks);
+            };
+            request.onerror = () => {
+                console.error("Error loading playlist:", request.error);
+                reject(request.error);
+            }
+        });
+    }
+
+    function clearPlaylistAndStorage() {
+        if (!db) {
+            showMessageBox('Error', 'Database not initialized.');
+            return;
+        }
+
+        if (!confirm("Are you sure you want to clear the entire playlist and delete all local audio files from storage? This action cannot be undone.")) {
+            return;
+        }
+
+        try {
+            // Revoke all current blob URLs
+            playlist.forEach(track => {
+                if (track.fileUrl) URL.revokeObjectURL(track.fileUrl);
+            });
+
+            const transaction = db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.clear();
+
+            request.onsuccess = () => {
+                playlist = [];
+                currentTrackIndex = -1;
+                pauseTrack();
+                renderPlaylist();
+                updateTrackInfo({
+                    title: 'CAL MUSIC', 
+                    artist: 'Offline Mode',
+                    album: 'Load files to build your console.',
+                });
+                showMessageBox('Playlist Cleared', 'All tracks and local audio data have been successfully deleted from the console storage.');
+            };
+            request.onerror = (e) => {
+                console.error("Failed to clear DB:", e);
+                showMessageBox('Error', 'Failed to clear database.');
+            };
+        } catch (e) {
+            console.error("Error during DB clear:", e);
+            showMessageBox('Error', 'Database operation failed.');
+        }
+    }
+
+
+    // --- Utility Functions (Minor change in changeView to activate 'nowPlayingContent' initially) ---
+
+    function formatTime(seconds) {
+        if (isNaN(seconds) || seconds < 0) return '0:00';
+        const minutes = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    function showMessageBox(title, text) {
+        messageTitleEl.textContent = title;
+        messageTextEl.textContent = text;
+        messageBox.classList.remove('hidden');
+    }
+
+    function hideMessageBox() {
+        messageBox.classList.add('hidden');
+    }
+    
+    function changeView(viewId) {
+        document.querySelectorAll('.view-section').forEach(section => {
+            section.classList.remove('active');
+        });
+        document.getElementById(viewId).classList.add('active');
+        activeView = viewId;
+
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            // Remove active style from all buttons
+            btn.classList.remove('nav-button-active');
+            
+            // Add active style to the active button
+            if (btn.dataset.view === viewId) {
+                 btn.classList.add('nav-button-active');
+            }
+        });
+        
+        // Ensure Now Playing icon is active on load
+        if (viewId === 'nowPlayingContent') {
+             document.querySelector('[data-view="nowPlayingContent"]').classList.add('nav-button-active');
+        }
+    }
+
+    // --- Player Logic (Critical changes for reliability) ---
+
+    async function togglePlayPause() {
+        if (playlist.length === 0) {
+            showMessageBox('No Tracks', 'Please add some audio files via the "Add Tracks" button first.');
+            return;
+        }
+        
+        if (currentTrackIndex === -1) {
+            currentTrackIndex = 0;
+            // Ensure track is loaded before attempting to play
+            await loadTrack(currentTrackIndex); 
+        }
+
+        if (isPlaying) {
+            pauseTrack();
+        } else {
+            if (audio.ended) audio.currentTime = 0;
+            
+            // Re-check source just in case the initial loadTrack failed or was skipped
+            if (!audio.src) {
+                await loadTrack(currentTrackIndex);
+            }
+            await playTrack();
+        }
+    }
+
+    async function playTrack() {
+        try {
+            // CRITICAL FIX: Ensure AudioContext is resumed, especially on initial user interaction
+            if (audioContext && audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+            await audio.play();
+            isPlaying = true;
+            
+            // Update Play/Pause SVG to PAUSE (two vertical bars)
+            playPauseIcon.setAttribute('fill', 'currentColor'); 
+            playPauseIcon.innerHTML = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>';
+            
+            if (!animationFrameId) updateLoop();
+        } catch (error) {
+            console.error("Error during playback:", error);
+            // Inform user about common auto-play blocks
+            if (error.name === 'NotAllowedError' || error.name === 'NotSupportedError') {
+                showMessageBox(
+                    'Playback Blocked',
+                    'Your browser requires a direct user click to play audio. Please click "Acknowledge" and then Play again.'
+                );
+            } else if (error.message.includes("failed to fetch")) {
+                 showMessageBox(
+                    'Playback Error',
+                    'Could not load the track file. The local file reference might be corrupted. Try reloading the track.'
+                );
+            }
+            isPlaying = false;
+        }
+    }
+
+    function pauseTrack() {
+        audio.pause();
+        isPlaying = false;
+        
+        // Update Play/Pause SVG back to PLAY (triangle)
+        playPauseIcon.setAttribute('fill', 'currentColor'); 
+        playPauseIcon.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"></polygon>';
+    }
+
+    function updateTrackInfo(track) {
+        currentTitleEl.textContent = track.title || 'Unknown Title';
+        currentArtistEl.textContent = track.artist || 'Unknown Artist';
+        currentAlbumEl.textContent = track.album || 'Unknown Album';
+        
+        document.title = `${track.title} - ${track.artist} | Cal Music`; 
+    }
+
+    // CRITICAL FIX: Improved loadTrack to handle Blob URL lifecycle correctly
+    async function loadTrack(index) {
+        if (index < 0 || index >= playlist.length) return;
+
+        pauseTrack(); 
+        
+        const prevTrack = playlist[currentTrackIndex];
+        currentTrackIndex = index;
+        const track = playlist[currentTrackIndex];
+
+        // 1. Revoke the OLD Blob URL to free memory
+        if (prevTrack && prevTrack.fileUrl && prevTrack.fileUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(prevTrack.fileUrl);
+        }
+        
+        // 2. CRITICAL: Recreate the Blob URL for the new track using the stored File object
+        // This ensures the URL is valid, as Blob URLs expire when the document is reloaded.
+        if (track.file) {
+            track.fileUrl = URL.createObjectURL(track.file);
+        } else {
+            console.error("Track object missing file data:", track);
+            showMessageBox('Track Data Missing', 'Failed to load track data from local storage. Skipping track.');
+            skipTrack(1); // Try next track
+            return;
+        }
+
+        updateTrackInfo(track);
+        renderPlaylist();
+
+        audio.src = track.fileUrl;
+        audio.load(); 
+
+        return new Promise(resolve => {
+            let resolved = false;
+
+            const onCanPlay = () => {
+                if (resolved) return;
+                resolved = true;
+                
+                audio.removeEventListener('canplaythrough', onCanPlay);
+                audio.removeEventListener('error', onError);
+                
+                if (isNaN(audio.duration) || audio.duration === Infinity) {
+                    console.warn(`Duration for ${track.title} is unknown or infinity.`);
+                    durationEl.textContent = '??';
+                    seekSlider.max = 0;
+                } else {
+                    seekSlider.max = audio.duration;
+                    durationEl.textContent = formatTime(audio.duration);
+                }
+                
+                seekSlider.value = 0;
+                loadVolume(); // Re-apply volume
+
+                resolve();
+            };
+            
+            const onError = (e) => {
+                 if (resolved) return;
+                resolved = true;
+                audio.removeEventListener('canplaythrough', onCanPlay);
+                audio.removeEventListener('error', onError);
+                
+                console.error(`Audio loading error for ${track.title}:`, e);
+                showMessageBox('Playback Error', `Could not load track: ${track.title}. The file format may not be supported or the file is corrupted. Skipping...`);
+                
+                // Immediately try to skip to the next track on critical error
+                const nextIndex = currentTrackIndex + 1;
+                if (nextIndex < playlist.length) {
+                    loadTrack(nextIndex).then(() => {
+                        if (isPlaying) playTrack();
+                    });
+                } else {
+                    pauseTrack();
+                }
+                resolve(); 
+            };
+
+            audio.addEventListener('canplaythrough', onCanPlay); 
+            audio.addEventListener('error', onError);
+            
+            setTimeout(() => {
+                if (!resolved) {
+                    console.warn(`Load timeout for ${track.title}. Proceeding anyway.`);
+                    // Resolve even on timeout to not block the player UI
+                    onCanPlay(); 
+                }
+            }, 5000); 
+        });
+    }
+
+    function skipTrack(delta) {
+        if (playlist.length === 0) return;
+        
+        let newIndex;
+        if (isShuffle) {
+            newIndex = Math.floor(Math.random() * playlist.length);
+        } else {
+            newIndex = currentTrackIndex + delta;
+            if (newIndex >= playlist.length) newIndex = 0;
+            if (newIndex < 0) newIndex = playlist.length - 1;
+        }
+        
+        // Prevent infinite looping on single track skip when only one track exists
+        if (playlist.length === 1 && delta !== 0 && repeatMode !== 'one') {
+            audio.currentTime = 0;
+            if(isPlaying) playTrack();
+            return;
+        }
+
+        loadTrack(newIndex).then(() => {
+            if (isPlaying) playTrack();
+        });
+    }
+
+    audio.addEventListener('ended', () => {
+        if (repeatMode === 'one') {
+            audio.currentTime = 0;
+            playTrack();
+        } else {
+            skipTrack(1);
+        }
+    });
+
+    // --- Audio File & Metadata Handling (No changes) ---
+
+    audioFileInput.addEventListener('change', async (event) => {
+        const files = Array.from(event.target.files);
+        let tracksProcessed = 0;
+        let successCount = 0;
+        
+        event.target.value = ''; 
+
+        if (files.length === 0) {
+            return;
+        }
+
+        showMessageBox('Loading Tracks', `Processing and storing ${files.length} track(s) locally. Do not navigate away...`);
+
+        const newTracks = [];
+
+        for (const file of files) {
+            let track = {
+                file: file, 
+                title: file.name,
+                artist: 'Unknown Artist',
+                album: 'Unknown Album',
+                albumArtUrl: 'https://placehold.co/180x180/eee/333?text=Q', 
+            };
+
+            try {
+                // 1. Read Metadata
+                await new Promise((resolve) => {
+                    jsmediatags.read(file, {
+                        onSuccess: function(tag) {
+                            track.title = tag.tags.title || file.name.replace(/\.[^/.]+$/, ""); 
+                            track.artist = tag.tags.artist || 'Unknown Artist';
+                            track.album = tag.tags.album || 'Unknown Album';
+
+                            if (tag.tags.picture) {
+                                const picture = tag.tags.picture;
+                                let base64String = "";
+                                try {
+                                    for (let i = 0; i < picture.data.length; i++) {
+                                        base64String += String.fromCharCode(picture.data[i]);
+                                    }
+                                    track.albumArtUrl = `data:${picture.format};base64,${btoa(base64String)}`;
+                                } catch (e) {
+                                    console.warn("Failed to process album art Base64:", e);
+                                }
+                            }
+                            resolve();
+                        },
+                        onError: function(error) {
+                            console.warn(`Error reading tags for ${file.name}:`, error.type);
+                            resolve(); 
+                        }
+                    });
+                });
+                
+                // 2. Save to DB
+                const id = await saveTrackToDB(track);
+                
+                // 3. Prepare for playback
+                track.id = id;
+                // Create Blob URL immediately after saving
+                track.fileUrl = URL.createObjectURL(track.file); 
+                newTracks.push(track);
+                successCount++;
+
+            } catch (e) {
+                console.error(`Failed to process or store track: ${file.name}`, e);
+                showMessageBox('Storage Error', `Failed to store track: ${file.name}. It may be too large or your storage limit reached.`);
+            }
+            tracksProcessed++;
+        }
+        
+        if (newTracks.length > 0) {
+            playlist = playlist.concat(newTracks);
+        }
+
+        hideMessageBox(); 
+        
+        if (successCount > 0) {
+            showMessageBox('Tracks Added', `${successCount} new track(s) successfully added and stored locally.`);
+            renderPlaylist();
+            
+            if (currentTrackIndex === -1 && playlist.length > 0) {
+                currentTrackIndex = playlist.length - newTracks.length;
+                await loadTrack(currentTrackIndex);
+            }
+        } else if (tracksProcessed > 0) {
+            showMessageBox('Error', 'No tracks were successfully added. Check console for details, or try a smaller file.');
+        }
+        
+    });
+
+    function renderPlaylist() {
+        if (playlist.length === 0) {
+            playlistEl.innerHTML = '<p class="text-gray-500 text-center p-8">The console is empty. Use the "Add Tracks" button to load audio files from your device and store them locally.</p>';
+            return;
+        }
+
+        playlistEl.innerHTML = '';
+        playlist.forEach((track, index) => {
+            const isCurrent = index === currentTrackIndex;
+            const item = document.createElement('div');
+            const glowColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-glow-color');
+            item.className = `playlist-item p-3 rounded-lg flex items-center space-x-4 cursor-pointer transition hover:bg-gray-100 ${isCurrent ? 'bg-control-color border-l-4' : 'border-l-4 border-transparent'}`;
+            if (isCurrent) {
+                item.style.borderColor = glowColor;
+                item.style.backgroundColor = 'var(--control-color)';
+            }
+            item.onclick = () => {
+                loadTrack(index).then(() => {
+                    if (!isPlaying || currentTrackIndex !== index) playTrack(); 
+                });
+            };
+
+            const art = `<img src="${track.albumArtUrl}" onerror="this.onerror=null; this.src='https://placehold.co/180x180/eee/333?text=Q';" class="w-12 h-12 rounded-lg object-cover flex-shrink-0 shadow-md" alt="Art">`;
+            const info = `
+                <div class="flex-grow min-w-0">
+                    <p class="text-base font-semibold truncate text-gray-800">${track.title}</p>
+                    <p class="text-xs text-gray-500 truncate">${track.artist} (${track.album})</p>
+                </div>
+            `;
+
+            item.innerHTML = art + info; 
+            playlistEl.appendChild(item);
+        });
+    }
+
+    // --- Transport Control Toggles (No changes) ---
+
+    function toggleShuffle() {
+        isShuffle = !isShuffle;
+        shuffleBtn.classList.toggle('glow-active', isShuffle);
+        showMessageBox('Shuffle Mode', isShuffle ? 'Shuffle is ON. Tracks will be randomly selected.' : 'Shuffle is OFF. Tracks will play sequentially.');
+    }
+
+    function toggleRepeat() {
+        if (repeatMode === 'off') {
+            repeatMode = 'all';
+            // Repeat All SVG
+            repeatIconSvg.innerHTML = '<polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path>';
+            repeatBtn.classList.add('glow-active');
+            showMessageBox('Repeat Mode', 'Repeat All: Playlist will loop.');
+        } else if (repeatMode === 'all') {
+            repeatMode = 'one';
+            // Repeat One SVG (Repeat All with '1' in the middle)
+            repeatIconSvg.innerHTML = '<polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path><path d="M12 11.5L12 14.5M10.5 13H13.5"></path>'; 
+            showMessageBox('Repeat Mode', 'Repeat One: Current track will loop.');
+        } else { // repeatMode === 'one'
+            repeatMode = 'off';
+            // Repeat All SVG (back to normal)
+            repeatIconSvg.innerHTML = '<polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path>';
+            repeatBtn.classList.remove('glow-active');
+            showMessageBox('Repeat Mode', 'Repeat is OFF.');
+        }
+    }
+    
+    // --- LIGHTING CONTROL FUNCTIONS (No changes) ---
+
+    function getHueName(hue) {
+        if (hue >= 330 || hue < 30) return 'Red';
+        if (hue < 90) return 'Yellow/Orange';
+        if (hue < 150) return 'Green';
+        if (hue < 210) return 'Cyan/Blue';
+        if (hue < 270) return 'Violet/Purple';
+        if (hue < 330) return 'Magenta';
+        return 'Purple';
+    }
+    
+    // NEW RAINBOW LOGIC
+    function rainbowLoop() {
+        currentRainbowHue = (currentRainbowHue + 0.5) % 360; // Shift hue slowly
+        
+        // Update ambient hue and primary glow based on the rotating hue
+        document.documentElement.style.setProperty('--ambient-hue', currentRainbowHue.toFixed(0));
+        document.documentElement.style.setProperty('--primary-glow-color', `hsl(${currentRainbowHue}, ${saturationSlider.value}%, 50%)`);
+        
+        // Also update the hue slider thumb to match the current rainbow color
+        hueSlider.style.setProperty('--primary-glow-color', `hsl(${currentRainbowHue}, ${saturationSlider.value}%, 50%)`);
+        
+        // Update the UI text to show the shifting color
+        document.getElementById('hueValue').textContent = `${currentRainbowHue.toFixed(0)}° (${getHueName(parseInt(currentRainbowHue))})`;
+        
+        if (isRainbowMode) {
+            rainbowFrameId = requestAnimationFrame(rainbowLoop);
+        } else {
+             cancelAnimationFrame(rainbowFrameId);
+             rainbowFrameId = null;
+        }
+    }
+
+    function toggleRainbowMode() {
+        isRainbowMode = !isRainbowMode;
+        
+        // Update UI
+        rainbowToggle.textContent = isRainbowMode ? 'ON' : 'OFF';
+        rainbowToggle.classList.toggle('bg-gray-800', isRainbowMode);
+        rainbowToggle.classList.toggle('bg-red-500', !isRainbowMode);
+        rainbowToggle.classList.toggle('hover:bg-gray-700', isRainbowMode);
+        rainbowToggle.classList.toggle('hover:bg-red-400', !isRainbowMode);
+
+        if (isRainbowMode) {
+            // Disable static hue control when rainbow is on
+            hueSlider.disabled = true;
+            currentRainbowHue = parseFloat(hueSlider.value); // Start from current setting
+            rainbowLoop();
+            showMessageBox('Rainbow Shift', 'Rainbow Shift Mode is **ON**. The ambient color is constantly rotating.');
+        } else {
+            // Re-enable static hue control and lock the color to its setting
+            hueSlider.disabled = false;
+            updateStaticLighting();
+            showMessageBox('Rainbow Shift', 'Rainbow Shift Mode is **OFF**. Ambient color is locked to the Base Hue slider.');
+        }
+    }
+
+    function toggleDynamicLighting() {
+        isDynamicLighting = !isDynamicLighting;
+        dynamicLightingToggle.textContent = isDynamicLighting ? 'ON' : 'OFF';
+        dynamicLightingToggle.classList.toggle('bg-gray-800', isDynamicLighting);
+        dynamicLightingToggle.classList.toggle('bg-red-500', !isDynamicLighting);
+        
+        // When turning off, immediately apply the static hue to lock the color
+        if (!isDynamicLighting && !isRainbowMode) {
+             updateStaticLighting();
+        } 
+    }
+    
+    function updateStaticLighting() {
+        // If Rainbow is ON, do not let the static sliders change the ambient hue
+        if (isRainbowMode) return; 
+        
+        const hue = hueSlider.value;
+        const saturation = saturationSlider.value;
+        const intensity = intensitySlider.value / 100;
+
+        // 1. Update primary glow color variable (always uses the hue slider value)
+        document.documentElement.style.setProperty('--primary-glow-color', `hsl(${hue}, ${saturation}%, 50%)`);
+
+        // 2. Update background/ambient variables
+        document.documentElement.style.setProperty('--ambient-hue', hue);
+        document.documentElement.style.setProperty('--ambient-saturation', `${saturation}%`);
+        document.documentElement.style.setProperty('--ambient-intensity', intensity.toFixed(2));
+        
+        // 3. Update UI text
+        document.getElementById('hueValue').textContent = `${hue}° (${getHueName(parseInt(hue))})`;
+        document.getElementById('saturationValue').textContent = `${saturation}%`;
+        document.getElementById('intensityValue').textContent = `${Math.round(intensity * 100)}%`;
+    }
+
+    // --- Audio Context, Visualizer, and EQ Setup (No changes) ---
+
+    function setupAudioContext() {
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            canvas = document.getElementById('audioVisualizer');
+            canvasCtx = canvas.getContext('2d');
+            
+            sourceNode = audioContext.createMediaElementSource(audio);
+            gainNode = audioContext.createGain(); 
+
+            let previousNode = sourceNode;
+
+            Object.keys(eqSliders).forEach((key) => {
+                const slider = eqSliders[key];
+                const filter = audioContext.createBiquadFilter();
+                filter.type = slider.type;
+                filter.frequency.setValueAtTime(slider.freq, audioContext.currentTime);
+                filter.gain.setValueAtTime(0, audioContext.currentTime); 
+
+                slider.node = filter;
+                eqNodes.push(filter);
+
+                previousNode.connect(filter);
+                previousNode = filter; 
+            });
+            
+            analyserNode = audioContext.createAnalyser();
+            analyserNode.fftSize = 256;
+            bufferLength = analyserNode.frequencyBinCount;
+            dataArray = new Uint8Array(bufferLength);
+            
+            previousNode.connect(gainNode);
+            gainNode.connect(analyserNode);
+            analyserNode.connect(audioContext.destination);
+            
+        } catch (e) {
+            console.error('AudioContext setup failed:', e);
+            canvas.style.display = 'none';
+        }
+        
+        Object.keys(eqSliders).forEach((key) => {
+            const sliderEl = document.getElementById(key);
+            const slider = eqSliders[key];
+
+            sliderEl.addEventListener('input', () => {
+                if (audioContext.state === 'suspended') audioContext.resume();
+                const gain = parseFloat(sliderEl.value);
+                slider.node.gain.setValueAtTime(gain, audioContext.currentTime);
+                slider.valueEl.textContent = `${gain.toFixed(1)} dB`;
+            });
+            // Initial setting for EQ
+            if (slider.node) slider.node.gain.setValueAtTime(parseFloat(sliderEl.value), audioContext.currentTime);
+            slider.valueEl.textContent = `${parseFloat(sliderEl.value).toFixed(1)} dB`;
+        });
+    }
+
+    function resizeCanvas() {
+        if (canvas) {
+            const container = canvas.parentElement; 
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+    }
+
+    function drawVisualizer() {
+        if (!analyserNode) return;
+
+        analyserNode.getByteFrequencyData(dataArray);
+        canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const barWidth = (canvas.width / bufferLength) * 2;
+        let x = 0;
+        let bassEnergySum = 0;
+        let bassBands = Math.floor(bufferLength * 0.2); 
+
+        for(let i = 0; i < bufferLength; i++) {
+            const dataPoint = dataArray[i];
+            const percent = dataPoint / 255; 
+            const barHeight = percent * canvas.height * 0.9; 
+
+            if (i < bassBands) {
+                bassEnergySum += dataPoint;
+            }
+
+            const freqPercent = i / bufferLength;
+            
+            // If rainbow mode is on, use the current rotating hue as the base
+            const baseHue = isRainbowMode 
+                ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ambient-hue'))
+                : parseFloat(hueSlider.value);
+                
+            const saturation = getComputedStyle(document.documentElement).getPropertyValue('--ambient-saturation');
+            
+            // Subtle hue shift across the visualizer bands
+            const hue = baseHue + (freqPercent * 60) - 30;
+            
+            // Draw bar
+            canvasCtx.fillStyle = `hsla(${hue}, ${saturation}, 40%, 0.8)`;
+            canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+
+            // Draw soft vertical glow
+            canvasCtx.fillStyle = `hsla(${hue}, ${saturation}, 60%, 0.1)`;
+            canvasCtx.fillRect(x, 0, barWidth, canvas.height);
+
+            x += barWidth + 1;
+        }
+
+        // --- Dynamic Ambient Lighting Update ---
+        const baseIntensity = parseFloat(intensitySlider.value) / 100;
+        
+        if (isDynamicLighting) { 
+            const avgBass = bassEnergySum / bassBands;
+            
+            // Increased boost factor (4.0 instead of 1.5) for more dramatic light pulsing
+            const musicBoost = (avgBass / 255) * 4.0; 
+            
+            // Clamp intensity higher (e.g., 1.5 or 150%) to ensure the glow is fully visible on strong beats
+            const newIntensity = Math.min(baseIntensity + musicBoost, 1.5); 
+            
+            // Only apply bass-based hue shift if RAINBOW mode is OFF
+            if (!isRainbowMode) {
+                const newHueShift = (avgBass / 255) * 30;
+                const staticHue = parseFloat(hueSlider.value);
+                // Shift ambient hue based on music
+                document.documentElement.style.setProperty('--ambient-hue', (staticHue - newHueShift).toFixed(0));
+            }
+
+            document.documentElement.style.setProperty('--ambient-intensity', newIntensity.toFixed(2));
+        } else {
+             // If dynamic is OFF, ensure only base intensity is used
+             document.documentElement.style.setProperty('--ambient-intensity', baseIntensity.toFixed(2));
+             // If dynamic is OFF and Rainbow is OFF, ensure hue is static
+             if (!isRainbowMode) {
+                 document.documentElement.style.setProperty('--ambient-hue', parseFloat(hueSlider.value));
+             }
+        }
+    }
+
+
+    // --- Time, Seeking, and Volume (No changes) ---
+    
+    seekSlider.addEventListener('input', () => {
+        currentTimeEl.textContent = formatTime(seekSlider.value);
+    });
+
+    seekSlider.addEventListener('change', () => {
+        if (audio.src && audioContext.state !== 'closed') {
+            audio.currentTime = parseFloat(seekSlider.value);
+        }
+    });
+
+    audio.addEventListener('timeupdate', () => {
+        if (!seekSlider.matches(':active') && !isNaN(audio.currentTime)) {
+            seekSlider.value = audio.currentTime;
+            currentTimeEl.textContent = formatTime(audio.currentTime);
+        }
+    });
+    
+    function handleVolumeInput(event) {
+        const volume = event.target.value / 100;
+        
+        volumeSlider.value = event.target.value;
+        volumeSliderMobile.value = event.target.value;
+
+        if (gainNode && audioContext.state !== 'closed') {
+            gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+        } else {
+            audio.volume = volume;
+        }
+        localStorage.setItem('volume', volume);
+        updateVolumeIcon(volume);
+    }
+    
+    volumeSlider.addEventListener('input', handleVolumeInput);
+    volumeSliderMobile.addEventListener('input', handleVolumeInput); 
+    
+    function updateVolumeIcon(volume) {
+        const iconClass = volume > 0.66 ? 'ph ph-speaker-high' : 
+                         volume > 0.33 ? 'ph ph-speaker-low' : 
+                         volume > 0 ? 'ph ph-speaker-none' : 'ph ph-speaker-slash';
+        
+        volumeIcon.className = `${iconClass} text-xl text-gray-600`;
+        volumeIconMobile.className = `${iconClass} text-xl text-gray-600`;
+    }
+
+    function loadVolume() {
+        const savedVolume = parseFloat(localStorage.getItem('volume')) || 0.75;
+        const volValue = savedVolume * 100;
+        volumeSlider.value = volValue;
+        volumeSliderMobile.value = volValue; 
+        
+        if (gainNode && audioContext.state !== 'closed') {
+            gainNode.gain.setValueAtTime(savedVolume, audioContext.currentTime);
+        } 
+        audio.volume = savedVolume;
+        updateVolumeIcon(savedVolume);
+    }
+    
+    // --- Main Update Loop (No changes) ---
+
+    function updateLoop() {
+        if (analyserNode && activeView === 'nowPlayingContent') {
+            drawVisualizer();
+        }
+
+        animationFrameId = requestAnimationFrame(updateLoop);
+    }
+    
+    // --- Initialization ---
+
+    async function initialize() {
+        // Essential setup
+        setupAudioContext();
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // CRITICAL FIX: Attempt to resume AudioContext early on initialization, 
+        // especially if it was created in 'suspended' state by the browser.
+        if (audioContext && audioContext.state === 'suspended') {
+            // It will be fully resumed upon first user interaction (togglePlayPause/EQ input)
+            audioContext.resume().catch(e => console.warn("Initial AudioContext resume failed (expected if no user interaction):", e));
+        }
+
+        // 1. Load initial lighting settings and apply them
+        updateStaticLighting(); 
+        toggleDynamicLighting(); // Call once to set initial state/text (defaults to ON)
+        
+        // Set initial state for new toggle buttons
+        rainbowToggle.textContent = 'OFF';
+        
+        // 2. Open Database
+        try {
+            await openDB();
+        } catch (e) {
+            console.error("Initialization failed: Database not available.");
+        }
+        
+        // 3. Load Playlist and Volume
+        playlist = await loadPlaylistFromDB();
+        loadVolume();
+        
+        // 4. Render and set initial track
+        renderPlaylist();
+        
+        if (playlist.length > 0) {
+            currentTrackIndex = 0;
+            // Load track data but DO NOT auto-play
+            await loadTrack(0); 
+        } else {
+             document.getElementById('fileStatus').textContent = 'The console is empty. Use the "Add Tracks" button to load audio files.';
+        }
+        
+        // 5. Start visualizer loop and UI
+        animationFrameId = requestAnimationFrame(updateLoop);
+        changeView('nowPlayingContent');
+    }
+    
+    window.onload = initialize;
+</script>
+</body>
+</html>
